@@ -31,9 +31,18 @@ class CaseTemperature(unittest.TestCase):
         from pynmea2.types.talker import MTW # Temperature.
         self.assertTrue(isinstance(depth_transducer.nmea_object, MTW))
 
+class NmeaTestSuite(unittest.TestSuite):
+    """Test a set of sentences."""
+
+    def __init__(self):
+        super(NmeaTestSuite, self).__init__()
+        self.addTest(CaseDepth())
+        self.addTest(CaseTemperature())
+
 if __name__ == '__main__':
     import rosunit
-    import rostest
+    rosunit.unitrun('nmea_depth_transducer', 'test_nmea', NmeaTestSuite)
 
-    rostest.rosrun('nmea_depth_transducer', 'test_depth', CaseDepth)
-    rostest.rosrun('nmea_depth_transducer', 'test_temperature', caseTemperature)
+
+    import rostest
+    rostest.rosrun('nmea_depth_transducer', 'test_nmea', NmeaTestSuite)
