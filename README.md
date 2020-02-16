@@ -66,4 +66,21 @@ Publishes depth and temperature measurements of the depth transducer.
 	Temperature in Celsius.
 
 
+## Manual testing
+With `socat` a virtual serial port can be created and messages can be sent. 
 
+First create the two serial ports:
+
+    socat -d -d pty,raw,echo=0,b4800 pty,raw,echo=0,b4800
+
+Run the node:
+
+    rosrun nmea_depth_transducer nmea_depth_transducer_node _serial_port:=<port1 path created by socat>
+
+Write a NMEA0183 message to the serial port, e.g., for depth
+
+    echo "\$SDDBT,008.8,f,002.7,M,001.4,F*0" > <port2 path created by socat>
+
+or for temperature
+
+    echo "\$SDMTW,025.5,C*36" > <port2 path created by socat>
