@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """ROS node to publish NMEA0183 depth/temperature transducer measurements."""
 
+import enum
+
 from pynmea2.types.talker import MTW # Temperature.
 from pynmea2.types.talker import DBT # Depth.
 
@@ -8,80 +10,129 @@ import rospy
 from nmea_msgs.msg import Sentence
 from sensor_msgs.msg import Range, Temperature
 
-from nmea_depth_transducer.nmea_depth_transducer_serial \
-    import NmeaDepthTransducerSerial
 from nmea_depth_transducer.default_values import *
 
 SENSOR_NAME = "depth_transducer" # Default node name.
+class SensorType(enum.Enum):
+    serial = 0 # Read directly from serial.
+    topic = 1 # Read from ROS topic with NMEA sentences.
+SENSOR_TYPE_DEFAULT = SensorType.serial.name # Default sensor type.
+DEFAULT_NMEA_TOPIC = "nmea_raw" # Default topic name for NMEA sentences.
 
-def nmea_depth_transducer_node():
-    # ROS node initialization and parameter read.
-    rospy.init_node(SENSOR_NAME)
-    rospy.sleep(2) # Wait for proper registration.
-    sensor_name = rospy.get_param("~sensor_name", SENSOR_NAME)
-    port = rospy.get_param("~serial_port", SERIAL_PORT)
-    baudrate = rospy.get_param("~baudrate", BAUDRATE)
+FAILED_INITIALIZATION_MSG = "Depth transducer failed initialization."
 
-    # Initialization of the serial.
-    depth_transducer = None
-    try:
-        depth_transducer = NmeaDepthTransducerSerial(port, baudrate)
-    except Exception as e:
-        rospy.logerr("Depth transducer failed initialization.")
-        return -1
+class NmeaDepthTransducerNode(object):
+    """Node to publish depth and temperature data."""
 
-    # Initialization of the publishers and related messages.
-    depth_transducer_frame = rospy.get_param("~depth_transducer_frame", 
-        depth_transducer)
+    def __init__(self):
+        """Initialization of the sensor."""
+        sensor_name = rospy.get_param("~sensor_name", SENSOR_NAME)
 
-    # Raw NMEA sentence.
-    nmea_sentence_pub = rospy.Publisher('/'.join([sensor_name, 'nmea_raw']),
-        Sentence, queue_size=1)
-    nmea_msg = Sentence()
-    nmea_msg.header.frame_id = depth_transducer_frame
+        self.sensor_type = rospy.get_param("~sensor_type", SENSOR_TYPE_DEFAULT)
 
-    # Depth.
-    depth_pub = rospy.Publisher('/'.join([sensor_name, 'depth']), 
-        Range, queue_size=1)
-    min_range = rospy.get_param("~min_range", 0.5)
-    max_range = rospy.get_param("~max_range", 100)
-    range_msg = Range()
-    range_msg.header.frame_id = depth_transducer_frame
-    range_msg.radiation_type = Range.ULTRASOUND
-    range_msg.min_range = min_range
-    range_msg.max_range = max_range
+        # Initialization of the publishers and related messages.
+        depth_transducer_frame = rospy.get_param("~depth_transducer_frame", 
+            sensor_name)
 
-    # Temperature.
-    temperature_pub = rospy.Publisher('/'.join([sensor_name, 'temperature']),
-        Temperature, queue_size=1)
-    temperature_msg = Temperature()
-    temperature_msg.header.frame_id = depth_transducer_frame
+        # Depth.
+        self.depth_pub = rospy.Publisher('/'.join([sensor_name, 'depth']), 
+            Range, queue_size=1)
+        field_of_view = rospy.get_param("~field_of_view", 0.0)
+        min_range = rospy.get_param("~min_range", 0.5)
+        max_range = rospy.get_param("~max_range", 100)
+        self.range_msg = Range()
+        self.range_msg.header.frame_id = depth_transducer_frame
+        self.range_msg.radiation_type = Range.ULTRASOUND
+        self.range_msg.min_range = min_range
+        self.range_msg.max_range = max_range
+        self.range_msg.field_of_view = field_of_view
 
-    r = rospy.Rate(10)
-    while not rospy.is_shutdown():
-        # Get next NMEA0183 sentence.
-        nmea_object = depth_transducer.read_data()
+        # Temperature.
+        temperature_variance = rospy.get_param("~temperature_variance", 0.1)
+        self.temperature_pub = rospy.Publisher(
+            '/'.join([sensor_name, 'temperature']),
+            Temperature, queue_size=1)
+        self.temperature_msg = Temperature()
+        self.temperature_msg.header.frame_id = depth_transducer_frame
+        self.temperature_msg.variance = temperature_variance
 
-        if not (nmea_object is None):
-            # If the parsed line is correct, publish the raw data.
-            current_time = rospy.Time.now()
-            nmea_msg.header.stamp = current_time
-            nmea_msg.sentence = depth_transducer.nmea_sentence
-            nmea_sentence_pub.publish(nmea_msg)
 
-            if isinstance(nmea_object, DBT):
-                # Publish depth.
-                if not (nmea_object.depth_meters is None):
-                    range_msg.header.stamp = current_time
-                    range_msg.range = float(nmea_object.depth_meters)
-                    depth_pub.publish(range_msg)
-            elif isinstance(nmea_object, MTW):
-                # Publish temperature.
-                if not (nmea_object.temperature is None):
-                    temperature_msg.header.stamp = current_time
-                    temperature_msg.temperature = float(nmea_object.temperature)
-                    temperature_pub.publish(temperature_msg)
-        r.sleep()
+        if self.sensor_type == SensorType.serial.name:
+            # If working with the serial connection.
+            port = rospy.get_param("~serial_port", SERIAL_PORT)
+            baudrate = rospy.get_param("~baudrate", BAUDRATE)
+
+            # Initialization of the serial.
+            self.depth_transducer = None
+            try:
+                from nmea_depth_transducer.nmea_depth_transducer_serial \
+                    import NmeaDepthTransducerSerial
+                self.depth_transducer = NmeaDepthTransducerSerial(port, baudrate)
+            except Exception as e:
+                rospy.logerr(FAILED_INITIALIZATION_MSG)
+                rospy.signal_shutdown(FAILED_INITIALIZATION_MSG)
+
+            # Raw NMEA sentence.
+            self.nmea_sentence_pub = rospy.Publisher(
+                '/'.join([sensor_name, DEFAULT_NMEA_TOPIC]),
+                Sentence, queue_size=1)
+            self.nmea_msg = Sentence()
+            self.nmea_msg.header.frame_id = depth_transducer_frame
+
+        elif self.sensor_type == SensorType.topic.name:
+            # If subscribed to an NMEA topic.
+            self.nmea_sub = rospy.Subscriber(
+                '/'.join([sensor_name, DEFAULT_NMEA_TOPIC]), Sentence,
+                self.nmea_callback)
+            from nmea_depth_transducer.nmea_depth_transducer \
+                import NmeaDepthTransducer
+            self.depth_transducer = NmeaDepthTransducer()
+
+    def nmea_callback(self, nmea_msg):
+        """From NMEA message to temperature or depth message."""
+        self.depth_transducer.nmea_sentence = nmea_msg.sentence
+        self.depth_transducer.parse_nmea_sentence()
+        self.publish_depth_temperature(
+            self.depth_transducer.nmea_object, 
+            nmea_msg.header.stamp)
+
+    def publish_depth_temperature(self, nmea_object, current_time):
+        """Publish depth or temperature."""
+        if isinstance(nmea_object, DBT):
+            # Publish depth.
+            if not (nmea_object.depth_meters is None):
+                self.range_msg.header.stamp = current_time
+                self.range_msg.range = float(nmea_object.depth_meters)
+                self.depth_pub.publish(self.range_msg)
+        elif isinstance(nmea_object, MTW):
+            # Publish temperature.
+            if not (nmea_object.temperature is None):
+                self.temperature_msg.header.stamp = current_time
+                self.temperature_msg.temperature = float(nmea_object.temperature)
+                self.temperature_pub.publish(self.temperature_msg)
+
+    def spin(self):
+        """Publish depth or temperature."""
+        self.r = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            # Get next NMEA0183 sentence.
+            nmea_object = self.depth_transducer.read_data()
+            if not (nmea_object is None):
+                # If the parsed line is correct, publish the raw data.
+                current_time = rospy.Time.now()
+                self.nmea_msg.header.stamp = current_time
+                self.nmea_msg.sentence = self.depth_transducer.nmea_sentence
+                self.nmea_sentence_pub.publish(self.nmea_msg)
+                self.publish_depth_temperature(nmea_object, current_time)
+
+            self.r.sleep()
+
 
 if __name__=='__main__':
-    nmea_depth_transducer_node()
+    rospy.init_node(SENSOR_NAME, disable_signals=True)
+    rospy.sleep(2) # Wait for proper registration.
+    nmea_depth_transducer_node = NmeaDepthTransducerNode()
+    if nmea_depth_transducer_node.sensor_type == SensorType.serial.name:
+        nmea_depth_transducer_node.spin()
+    elif nmea_depth_transducer_node.sensor_type == SensorType.topic.name:
+        rospy.spin()

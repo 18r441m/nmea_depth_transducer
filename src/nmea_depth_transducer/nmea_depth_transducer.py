@@ -17,12 +17,11 @@ class NmeaDepthTransducer(object):
     """Base class for reading the NMEA0183 depth transducer data.
     """
 
-    nmea_sentence = None
-    nmea_object = None
     def __init__(self):
         """Initialization to get the NMEA0183 sentences."""
-        raise NotImplementedError
+        self.nmea_sentence = None
+        self.nmea_object = None
 
-    def _parse_nmea_sentence(self):
+    def parse_nmea_sentence(self):
         """Parse NMEA0183 sentence."""
         self.nmea_object = pynmea2.parse(self.nmea_sentence)

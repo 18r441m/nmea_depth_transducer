@@ -26,14 +26,12 @@ class NmeaDepthTransducerSerial(NmeaDepthTransducer):
     def __init__(self, serial_port=SERIAL_PORT, baudrate=BAUDRATE):
         """Initialization of the serial port and parameters."""
 
+        super(NmeaDepthTransducerSerial, self).__init__()
+
         # Initialization of the serial port.
         self.serial = serial.Serial(serial_port, baudrate,
             timeout=SERIAL_TIMEOUT)
         time.sleep(1)
-
-        # Warm up to read some inputs.
-        for i in range(10):
-            self.serial.readline()
 
     def read_data(self):
         """Reading a NMEA0183 sentence."""
@@ -41,7 +39,7 @@ class NmeaDepthTransducerSerial(NmeaDepthTransducer):
             # Read from sensor.
             self.nmea_sentence = self.serial.readline()
             try:
-                self._parse_nmea_sentence()
+                self.parse_nmea_sentence()
             except pynmea2.nmea.ParseError as e:
                 return None
 
