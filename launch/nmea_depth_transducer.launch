@@ -1,0 +1,12 @@
+<launch>
+  <arg name="serial_port" default="/dev/ttyUSB0" />
+  <arg name="baudrate" default="4800" />
+  <arg name="depth_transducer_frame" default="depth_transducer" />
+
+  <node pkg="nmea_depth_transducer" type="nmea_depth_transducer_node" 
+      name="nmea_depth_transducer" output="screen">
+    <param name="serial_port" value="$(arg serial_port)"/>
+    <param name="baudrate" value="$(arg baudrate)"/>
+    <param name="depth_transducer_frame" value="$(arg depth_transducer_frame)"/>
+  </node>
+</launch>

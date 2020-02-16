@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package>
+  <name>nmea_depth_transducer</name>
+  <version>0.1.0</version>
+  <description>The nmea_depth_transducer package</description>
+
+  <maintainer email="alberto.quattrini.li@dartmouth.edu">Alberto Quattrini Li</maintainer>
+
+  <license>MIT</license>
+
+  <!-- <url type="website">http://wiki.ros.org/nmea_depth_transducer</url> -->
+
+  <author email="alberto.quattrini.li@dartmouth.edu">Alberto Quattrini Li</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <run_depend>rospy</run_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <run_depend>std_msgs</run_depend>
+  <run_depend>nmea_msgs</run_depend>
+
+</package>
