@@ -56,7 +56,6 @@ class NmeaDepthTransducerNode(object):
         self.temperature_msg.header.frame_id = depth_transducer_frame
         self.temperature_msg.variance = temperature_variance
 
-
         if self.sensor_type == SensorType.serial.name:
             # If working with the serial connection.
             port = rospy.get_param("~serial_port", SERIAL_PORT)
@@ -69,7 +68,7 @@ class NmeaDepthTransducerNode(object):
                     import NmeaDepthTransducerSerial
                 self.depth_transducer = NmeaDepthTransducerSerial(port, baudrate)
             except Exception as e:
-                rospy.logerr(FAILED_INITIALIZATION_MSG)
+                rospy.logfatal(FAILED_INITIALIZATION_MSG)
                 rospy.signal_shutdown(FAILED_INITIALIZATION_MSG)
 
             # Raw NMEA sentence.
